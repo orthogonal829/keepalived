@@ -4391,6 +4391,13 @@ vrrp_complete_init(void)
 			max_mtu_len = vrrp->ifp->mtu;
 	}
 
+	/* If we add VMAC interfaces, we read netlink messages, which
+	 * may include link down/link up, and these will alter num_script_if_fault
+	 * but that is initialised in initialise_trackiing_priorities() called below.
+	 * We therefore need to clear num_script_if_fault here. */
+	list_for_each_entry(vrrp, &vrrp_data->vrrp, e_list)
+		vrrp->num_script_if_fault = 0;
+
 #ifdef _HAVE_VRRP_VMAC_
 	check_vmac_conflicts();
 #endif
@@ -4837,6 +4844,22 @@ clear_diff_script(void)
 			}
 			nvscript->last_status = vscript->last_status;
 			nvscript->init_state = SCRIPT_INIT_STATE_DONE;
+		}
+	}
+}
+
+void
+set_previous_sync_group_states(void)
+{
+	vrrp_sgroup_t *ogroup, *ngroup;
+
+	list_for_each_entry(ngroup, &vrrp_data->vrrp_sync_group, e_list) {
+		list_for_each_entry(ogroup, &old_vrrp_data->vrrp_sync_group, e_list) {
+			if (!strcmp(ngroup->gname, ogroup->gname)) {
+				if (ngroup->state == ogroup->state)
+					ngroup->state_same_at_reload = true;
+				break;
+			}
 		}
 	}
 }

@@ -638,6 +638,9 @@ start_vrrp(data_t *prev_global_data)
 	if (reload) {
 		clear_diff_vrrp();
 		vrrp_dispatcher_release(old_vrrp_data);
+
+		/* Set previous sync group states to suppress duplicate notifies */
+		set_previous_sync_group_states();
 	}
 
 #ifdef _WITH_DBUS_
@@ -861,7 +864,9 @@ reload_vrrp_thread(__attribute__((unused)) thread_ref_t thread)
 
 	/* free backup data */
 	free_vrrp_data(old_vrrp_data);
+	old_vrrp_data = NULL;
 	free_global_data(old_global_data);
+	old_global_data = NULL;
 
 	free_old_interface_queue();
 
@@ -907,7 +912,8 @@ vrrp_respawn_thread(thread_ref_t thread)
 	if (report_child_status(thread->u.c.status, thread->u.c.pid, NULL))
 		thread_add_terminate_event(thread->master);
 	else if (!__test_bit(DONT_RESPAWN_BIT, &debug)) {
-		log_message(LOG_ALERT, "VRRP child process(%d) died: Respawning", thread->u.c.pid);
+		log_child_died("VRRP", thread->u.c.pid);
+
 		restart_delay = calc_restart_delay(&vrrp_start_time, &vrrp_next_restart_delay, "VRRP");
 		if (!restart_delay)
 			start_vrrp_child();
@@ -1090,6 +1096,9 @@ start_vrrp_child(void)
 #ifndef _ONE_PROCESS_DEBUG_
 	/* Signal handling initialization */
 	vrrp_signal_init();
+
+	/* Register emergency shutdown function */
+	register_shutdown_function(stop_vrrp);
 #endif
 
 	/* Start VRRP daemon */
