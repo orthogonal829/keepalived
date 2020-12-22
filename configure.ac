@@ -219,6 +219,9 @@ AC_ARG_ENABLE(systemd,
 AC_ARG_WITH(run-dir,
   [AS_HELP_STRING([--with-run-dir=PATH_TO_RUN], [specify directory where /run is located])],
   [RUN_DIR_SPECIFIED=Y], [RUN_DIR_SPECIFIED=N])
+AC_ARG_WITH(tmp-dir,
+  [AS_HELP_STRING([--with-tmp-dir=PATH_TO_TMP], [specify directory where run-time temporary files are to be located])],
+  [TMP_DIR_SPECIFIED=Y], [TMP_DIR_SPECIFIED=N])
 AC_ARG_ENABLE(strict-config-checks,
   [AS_HELP_STRING([--enable-strict-config-checks], [build with strict configuration checking])])
 AC_ARG_ENABLE(hardening,
@@ -1027,8 +1030,20 @@ dnl - vsyslog() Not defined by Posix, but available in glibc and musl
 AC_CHECK_FUNCS([vsyslog], [add_system_opt([VSYSLOG])])
 dnl - epoll_create1() since Linux 2.6.27 and glibc 2.9
 AC_CHECK_FUNCS([epoll_create1], [add_system_opt([EPOLL_CREATE1])])
+
 dnl - memfd_create() - since Linux 3.17 and glibc 2.27
+dnl - memfd_create() appeared in the kernel long before it appeared in
+dnl -   glibc so we use the raw syscall if it is available
 AC_CHECK_FUNCS([memfd_create], [add_system_opt([MEMFD_CREATE])])
+AS_IF([test "x$ac_cv_func_memfd_create" != xyes],
+  [
+    AC_CHECK_DECLS([__NR_memfd_create],
+      [AC_DEFINE([USE_MEMFD_CREATE_SYSCALL], [ 1 ], [Use syscall for memfd_create])], [],
+      [[#include <sys/syscall.h>]])
+  ])
+
+dnl - Since Linux 3.17
+AC_CHECK_DECLS([O_TMPFILE], [], [], [[#include <fcntl.h>]])
 
 # glibc uses unsigned int as 3rd parameter to __assert_fail(), musl uses int.
 AC_COMPILE_IFELSE([AC_LANG_SOURCE([[
@@ -2560,14 +2575,28 @@ if test "${enable_gnu_std_paths}" = "yes"; then
   AC_DEFINE([GNU_STD_PATHS], [ 1 ], [set to enforce GNU standard paths, for .pid files etc])
   RUN_DIR=$localstatedir
 elif test $RUN_DIR_SPECIFIED = Y -a .${with_run_dir} != .no; then
-  RUN_DIR=`echo ${with_run_dir} | sed -e "s:/run/*$::"`	# Remove a trailing /run - somewill will include it sometime
+  AS_IF([test `expr substr ${with_run_dir} 1 1` != /], [AC_MSG_ERROR([run-dir must be absolute path])])
+  # Remove any trailing /run and / - someone will include then sometime
+  RUN_DIR=`echo ${with_run_dir} | sed -e "s:/run/*$::" -e "s:/*$::"`
 elif test -d /run; then
   RUN_DIR=
 else
   RUN_DIR=/var
 fi
 AC_DEFINE_UNQUOTED([RUN_DIR_ROOT], [ "${RUN_DIR}" ], [Parent directory of /run])
-AC_SUBST([RUN_DIR])
+AC_SUBST([RUN_DIR_ROOT], [${RUN_DIR}])
+
+if test $TMP_DIR_SPECIFIED = Y; then
+  AS_IF([test `expr substr ${with_tmp_dir} 1 1` != /], [AC_MSG_ERROR([tmp-dir must be absolute path])])
+  # Remove any trailing / - someone will include it sometime
+  KA_TMP_DIR=`echo ${with_tmp_dir} | sed -e "s:/*$::"`
+else
+  KA_TMP_DIR=/tmp
+fi
+KA_TMP_DIR_LEN=`expr length $KA_TMP_DIR`
+AC_DEFINE_UNQUOTED([KA_TMP_DIR], [ "${KA_TMP_DIR}" ], [Location for temporary files])
+AC_DEFINE_UNQUOTED([KA_TMP_DIR_LEN], [ ${KA_TMP_DIR_LEN} ], [Length of KA_TMP_DIR])
+AC_SUBST([KA_TMP_DIR], [${KA_TMP_DIR}])
 
 dnl - Check type of rlim_t for printf() - this check needs to be late on
 dnl - since _FILE_OFFSET_BITS (set when using netsnmp) alters sizeof(rlim_t)
