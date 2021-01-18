@@ -94,7 +94,7 @@ m4_ifndef([AS_VAR_COPY],
 
 dnl ----[ Process this file with autoconf to produce a configure script ]----
 AC_PREREQ([2.63])
-AC_INIT([Keepalived], [2.1.5], [keepalived-users@groups.io], [], [http://www.keepalived.org/])
+AC_INIT([Keepalived], [2.2.1], [keepalived-users@groups.io], [], [http://www.keepalived.org/])
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([-Wall -Werror -Woverride foreign])
@@ -1019,7 +1019,8 @@ AC_FUNC_FORK
 # We add malloc and realloc to AC_CHECK_FUNCS instead.
 #AC_FUNC_MALLOC
 #AC_FUNC_REALLOC
-AC_CHECK_FUNCS([dup2 getcwd gettimeofday malloc memmove memset realloc select setenv socket strcasecmp strchr strdup strerror strpbrk strstr strtol strtoul uname])
+dnl - dup3 since Linux 2.6.27 and glibc 2.9
+AC_CHECK_FUNCS([dup2 dup3 getcwd gettimeofday malloc memmove memset realloc select setenv socket strcasecmp strchr strdup strerror strpbrk strstr strtol strtoul uname])
 dnl - pipe2() since Linux 2.6.27 and glibc 2.9.
 AC_CHECK_FUNCS([pipe2], [add_system_opt([PIPE2])])
 dnl - signalfd() since Linux 2.6.22 and glibc 2.8
@@ -2175,6 +2176,9 @@ CPPFLAGS="$SAV_CPPFLAGS"
 
 dnl ----[ Check for GLOB_BRACE support ]----
 AC_CHECK_DECLS([GLOB_BRACE], [add_system_opt([GLOB_BRACE])], [], [[#include <glob.h>]])
+
+dnl ----[ Check for GLOB_ALTDIRFUNC support ]----
+AC_CHECK_DECLS([GLOB_ALTDIRFUNC], [add_system_opt([GLOB_ALTDIRFUNC])], [], [[#include <glob.h>]])
 
 dnl ----[ Check for timegm() support ]----
 AC_MSG_CHECKING([for timegm()])
